@@ -1,0 +1,87 @@
+%%[
+    SET @SubscriberKey = "7102389026750025"
+    SET @TimeStamp = Now()
+]%%<script runat="server">
+    Platform.Load("Core", "1.1.1");
+    var data = {
+        MCard_Num: Variable.GetValue("@SubscriberKey"),
+        TimeStamp: Variable.GetValue("@TimeStamp")
+    }
+    var setup = {
+        authBaseURI: "https://mcdxqxmfjlzrk79vrg8jfnn49888.auth.marketingcloudapis.com/",
+        restBaseURI: "https://mcdxqxmfjlzrk79vrg8jfnn49888.rest.marketingcloudapis.com/",
+        clientId: "wfny4m8lafuoklkxp3kwvjjp",
+        clientSecret: "l9jZhNT6JeMd6kPV5GHzyjQ6",
+        eventDefinitionKey: "APIEvent-eeeba486-f322-4127-1ea5-9671a74d9af5"
+    }
+    try {
+        var token = getToken(setup);
+        var success = false;
+        if (!!token) success = triggerEvent(token, setup, data);
+    } catch (err) {
+        Write("Error: " + Stringify(err));
+    }
+    function getToken(setup) {
+        var config = {
+            url : setup.authBaseURI + "v2/token",
+            contentType : "application/json",
+            payload : {
+                "client_id": setup.clientId,
+                "client_secret": setup.clientSecret,
+                "grant_type": "client_credentials"
+            }
+        }
+        var req = HTTP.Post(config.url, config.contentType, Stringify(config.payload));
+        if (req.StatusCode == 200) {
+            var res = Platform.Function.ParseJSON(req.Response[0]);
+            return res.access_token;
+        } else {
+            return false;
+        }
+    }
+    function triggerEvent(token, setup, data) {
+        var config = {
+            url : setup.restBaseURI + "interaction/v1/events",
+            contentType : "application/json",
+            headerValue : "Bearer " + token,
+            payload : {
+                ContactKey: data.MCard_Num,
+                EventDefinitionKey: setup.eventDefinitionKey,
+                Data: data
+            }
+        }
+          var req = new Script.Util.HttpRequest(config.url);
+            req.emptyContentHandling = 0;
+            req.retries = 2;
+            req.continueOnError = true;
+            req.contentType = config.contentType;
+            req.setHeader("Authorization", config.headerValue);
+            req.method = "POST";
+            req.postData = Stringify(config.payload);
+
+        try {
+        var resp = req.send();
+        var resultStatusStr = String(resp.statusCode);
+        var resultJSON = Platform.Function.ParseJSON(String(resp.content));
+        Write(resultStatusStr);
+        if (resp.statusCode == 201) {
+            Write(resultJSON.eventInstanceId);
+        } else {
+            Write(Stringify(resultJSON));
+
+        }
+    } catch(e) {
+        Write('<br>Error: ' + Stringify(e));
+    }
+
+    }
+</script>%%[
+    VAR @langPreference, @content
+    SET @langPreference = Lookup("Journey_Profile", "DEMO_Nationality_Desc", "MCard_Num", @SubscriberKey)
+    SET @Value = "ไทย"
+    IF IndexOf(@langPreference,@Value) > 0 THEN
+        SET @content = "รับสิทธิพิเศษ และส่วนลดจากห้างฯ และศูนย์การค้า คลิก"
+    ELSE
+        SET @content = "Exclusive promotions and privileges throughout Departments and Shopping Complex, click"
+    ENDIF
+]%%%%=v(@content)=%%
